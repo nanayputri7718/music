@@ -1,0 +1,853 @@
+
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Apple_Music_icon.svg/1200px-Apple_Music_icon.svg.png">
+  <title>Lanaya Music</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --bg-primary: #1f2937; /* gray-800 */
+      --bg-secondary: #111827; /* gray-900 */
+      --text-primary: #f9fafb; /* gray-50 */
+      --text-secondary: #9ca3af; /* gray-400 */
+      --accent-color: #f43f5e; /* rose-500 */
+      --border-color: #4b5563; /* gray-600 */
+    }
+
+    html:not(.dark) {
+      --bg-primary: #ffffff; /* white */
+      --bg-secondary: #f3f4f6; /* gray-100 */
+      --text-primary: #111827; /* gray-900 */
+      --text-secondary: #4b5563; /* gray-600 */
+      --border-color: #d1d5db; /* gray-300 */
+    }
+
+    body {
+      background-color: var(--bg-secondary);
+      color: var(--text-primary);
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 16px; height: 16px;
+      background: var(--accent-color);
+      border-radius: 50%; cursor: pointer; margin-top: -6px;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 16px; height: 16px;
+      background: var(--accent-color);
+      border-radius: 50%; cursor: pointer;
+    }
+    .playlist-item.active {
+      background-color: var(--accent-color);
+      color: white;
+    }
+    .control-btn {
+      color: var(--text-secondary);
+      transition: color 0.2s;
+    }
+     .control-btn:hover {
+      color: var(--text-primary);
+    }
+    .playlist-item .title-span { max-width: 80%; }
+    @keyframes pulsePlay {
+      0%,100%{transform:scale(1);box-shadow:0 0 10px rgba(244,63,94,0.5);}
+      50%{transform:scale(1.1);box-shadow:0 0 25px rgba(244,63,94,0.8);}
+    }
+    .pulse-active{animation:pulsePlay 1.5s infinite ease-in-out;}
+    .shuffle-active, .repeat-active {color:var(--accent-color);}
+    #upload-area {
+        border: 2px dashed var(--border-color);
+        transition: border-color 0.3s, background-color 0.3s;
+    }
+    #upload-area.dragover {
+        border-color: var(--accent-color);
+        background-color: rgba(244, 63, 94, 0.1);
+    }
+    #lyrics-container {
+      white-space: pre-wrap;
+      font-family: 'Courier New', Courier, monospace;
+    }
+    /* Gaya untuk Modal Pencarian */
+    #search-modal-overlay {
+        background-color: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(5px);
+    }
+  </style>
+</head>
+
+<body class="p-4 font-sans">
+  <div id="main-container" class="w-full max-w-lg mx-auto rounded-2xl shadow-2xl p-6 space-y-6 relative" style="background-color: var(--bg-primary);">
+    <div class="absolute top-4 right-4">
+        <button id="theme-toggle-btn" class="control-btn" title="Ganti Tema">
+            <i data-lucide="sun" class="w-5 h-5"></i>
+        </button>
+    </div>
+
+    <div id="player-container" class="space-y-4">
+      <div class="text-center">
+        <div class="w-32 h-32 mx-auto bg-gray-700 rounded-lg flex items-center justify-center mb-4 shadow-lg">
+          <img id="song-artwork" src="https://placehold.co/128x128/374151/9ca3af?text=Music" alt="Album Art" class="w-full h-full object-cover rounded-lg">
+        </div>
+        <h2 id="song-title" class="text-xl font-semibold truncate">Pemutar Musik</h2>
+        <p id="song-filename" class="text-sm truncate" style="color: var(--text-secondary);">Pilih lagu untuk diputar</p>
+      </div>
+      
+      <div class="space-y-2">
+        <div class="flex items-center justify-between text-xs px-1" style="color: var(--text-secondary);">
+            <label for="visualizer-style" class="font-semibold">Visualizer</label>
+            <select id="visualizer-style" class="rounded px-2 py-1 text-xs focus:outline-none" style="background-color: var(--bg-secondary); color: var(--text-primary);">
+                <option value="bars">Bars</option>
+                <option value="wave">Wave</option>
+                <option value="circle">Circle</option>
+            </select>
+        </div>
+        <canvas id="visualizer" width="640" height="100" class="w-full h-24 rounded-lg" style="background-color: rgba(0,0,0,0.1)"></canvas>
+      </div>
+
+      <div class="space-y-1">
+        <input type="range" id="progress-bar" value="0"
+          class="w-full h-1 rounded-lg appearance-none cursor-pointer" style="background-color: var(--border-color);" disabled>
+        <div class="flex justify-between text-xs font-mono" style="color: var(--text-secondary);">
+          <span id="current-time">00:00</span>
+          <span id="duration">00:00</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-center space-x-6">
+          <button id="shuffle-btn" title="Acak Lagu (S)" class="control-btn"><i data-lucide="shuffle" class="w-6 h-6"></i></button>
+          <button id="prev-btn" class="control-btn" title="Sebelumnya (←)" disabled><i data-lucide="skip-back" class="w-6 h-6"></i></button>
+          <button id="play-pause-btn"
+            class="p-4 bg-rose-600 hover:bg-rose-700 rounded-full text-white transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Play/Pause (Spasi)" disabled>
+            <i id="play-icon" data-lucide="play" class="w-8 h-8"></i>
+            <i id="pause-icon" data-lucide="pause" class="w-8 h-8 hidden"></i>
+          </button>
+          <button id="stop-btn" class="control-btn" title="Stop" disabled><i data-lucide="stop-circle" class="w-6 h-6"></i></button>
+          <button id="next-btn" class="control-btn" title="Berikutnya (→)" disabled><i data-lucide="skip-forward" class="w-6 h-6"></i></button>
+          <button id="repeat-btn" title="Ulangi Lagu (R)" class="control-btn"><i data-lucide="repeat" class="w-6 h-6"></i></button>
+        </div>
+
+        <div id="volume-container" class="flex items-center justify-center space-x-2 pt-2">
+          <button id="volume-btn" class="control-btn" title="Mute (M)"><i id="volume-icon" data-lucide="volume-1" class="w-5 h-5"></i></button>
+          <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.5"
+            class="w-1/2 max-w-xs h-1 rounded-lg appearance-none cursor-pointer" title="Volume (↑/↓)" style="background-color: var(--border-color);">
+          <span id="volume-percentage" class="text-xs font-mono w-8 text-center" style="color: var(--text-secondary);">50</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="playlist-container">
+      <div id="playlist-controls" class="flex items-center justify-between mb-2">
+        <h3 class="font-semibold" style="color: var(--text-secondary);">Daftar Putar</h3>
+        <div class="flex items-center space-x-2">
+           <!-- Tombol Cari Musik Baru -->
+           <button id="search-music-btn" title="Cari Musik Online (F)" class="control-btn"><i data-lucide="search" class="w-4 h-4"></i></button>
+           <button id="lyrics-toggle-btn" title="Tampilkan Lirik (L)" class="control-btn"><i data-lucide="mic-2" class="w-4 h-4"></i></button>
+           <button id="rescan-btn" title="Scan Ulang Folder" class="control-btn"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
+        </div>
+      </div>
+      <input id="search-bar" type="text" placeholder="Cari lagu di daftar putar..." class="w-full p-2 mb-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" style="background-color: var(--bg-secondary); color: var(--text-primary);">
+      
+      <ul id="playlist" class="h-48 overflow-y-auto rounded-lg p-2 space-y-1" style="background-color: var(--bg-secondary);"></ul>
+      <div id="message-view" class="h-48 flex flex-col items-center justify-center rounded-lg p-2 text-center" style="background-color: var(--bg-secondary);">
+      </div>
+       <div id="lyrics-container" class="h-48 overflow-y-auto rounded-lg p-4 text-center hidden" style="background-color: var(--bg-secondary); color: var(--text-secondary);">
+          <p id="lyrics-text">Lirik akan muncul di sini.</p>
+      </div>
+    </div>
+    
+    <div id="upload-container">
+        <div id="upload-area" class="w-full p-6 text-center rounded-lg cursor-pointer">
+            <input type="file" id="file-input" class="hidden" multiple accept=".mp3,.wav">
+            <label for="file-input" class="cursor-pointer">
+                <div class="flex flex-col items-center justify-center space-y-2">
+                    <i data-lucide="upload-cloud" class="w-10 h-10" style="color: var(--text-secondary);"></i>
+                    <p class="text-sm" style="color: var(--text-secondary);">Seret & Lepas file di sini atau klik untuk memilih</p>
+                    <p class="text-xs" style="color: var(--text-secondary); opacity: 0.7;">Hanya mendukung MP3 dan WAV</p>
+                </div>
+            </label>
+        </div>
+        <p id="upload-status" class="text-center text-sm h-5 mt-2" style="color: var(--text-secondary);"></p>
+        <div id="progress-wrapper" class="w-full h-2.5 rounded-full hidden mt-2" style="background-color: var(--border-color);">
+            <div id="progress-bar-upload" class="bg-rose-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+    </div>
+    
+    <!-- Modal Pencarian Musik -->
+    <div id="search-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center">
+        <div id="search-modal-overlay" class="absolute inset-0"></div>
+        <div class="relative w-full max-w-md p-6 rounded-2xl shadow-2xl" style="background-color: var(--bg-primary);">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Cari Musik dari YouTube</h3>
+                <button id="close-search-modal-btn" class="control-btn"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </div>
+            <form id="search-form" class="flex space-x-2 mb-4">
+                <input type="text" id="youtube-search-input" placeholder="Ketik judul lagu atau artis..." class="w-full p-2 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" style="background-color: var(--bg-secondary); color: var(--text-primary);" required>
+                <button type="submit" class="p-2 bg-rose-600 hover:bg-rose-700 rounded-md text-white transition-colors"><i data-lucide="search" class="w-5 h-5"></i></button>
+            </form>
+            <div id="search-results-container" class="h-64 overflow-y-auto rounded-lg p-2 space-y-2" style="background-color: var(--bg-secondary);">
+                <!-- Hasil pencarian akan ditampilkan di sini -->
+                <div class="text-center p-4 text-sm" style="color: var(--text-secondary);">
+                    Mulai mencari untuk melihat hasil.
+                </div>
+            </div>
+            <div id="search-toast" class="absolute bottom-4 right-4 bg-green-500 text-white text-sm py-2 px-4 rounded-lg shadow-lg opacity-0 transition-opacity duration-300">
+                Lagu ditambahkan!
+            </div>
+        </div>
+    </div>
+
+  </div>
+
+  <audio id="player-audio" class="hidden" preload="metadata" crossOrigin="anonymous"></audio>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+
+      // === DOM Element Selections ===
+      const audio = document.getElementById("player-audio");
+      const songTitle = document.getElementById("song-title");
+      const songFilename = document.getElementById("song-filename");
+      const songArtwork = document.getElementById("song-artwork");
+      const progressBar = document.getElementById("progress-bar");
+      const currentTimeEl = document.getElementById("current-time");
+      const durationEl = document.getElementById("duration");
+      const prevBtn = document.getElementById("prev-btn");
+      const playPauseBtn = document.getElementById("play-pause-btn");
+      const playIcon = document.getElementById("play-icon");
+      const pauseIcon = document.getElementById("pause-icon");
+      const stopBtn = document.getElementById("stop-btn");
+      const nextBtn = document.getElementById("next-btn");
+      const shuffleBtn = document.getElementById("shuffle-btn");
+      const repeatBtn = document.getElementById("repeat-btn");
+      const playlistEl = document.getElementById("playlist");
+      const searchBar = document.getElementById("search-bar");
+      const rescanBtn = document.getElementById("rescan-btn");
+      const messageView = document.getElementById("message-view");
+      const volumeBtn = document.getElementById("volume-btn");
+      const volumeIcon = document.getElementById("volume-icon");
+      const volumeSlider = document.getElementById("volume-slider");
+      const volumePercentage = document.getElementById("volume-percentage");
+      const themeToggleBtn = document.getElementById('theme-toggle-btn');
+      const visualizerStyleSelector = document.getElementById('visualizer-style');
+      const lyricsToggleBtn = document.getElementById('lyrics-toggle-btn');
+      const lyricsContainer = document.getElementById('lyrics-container');
+      const lyricsText = document.getElementById('lyrics-text');
+      const uploadArea = document.getElementById("upload-area");
+      const fileInput = document.getElementById("file-input");
+      const uploadStatus = document.getElementById("upload-status");
+      const canvas = document.getElementById("visualizer");
+      const canvasCtx = canvas.getContext("2d");
+      
+      // === Elemen Fitur Pencarian Baru ===
+      const searchMusicBtn = document.getElementById('search-music-btn');
+      const searchModal = document.getElementById('search-modal');
+      const searchModalOverlay = document.getElementById('search-modal-overlay');
+      const closeSearchModalBtn = document.getElementById('close-search-modal-btn');
+      const searchForm = document.getElementById('search-form');
+      const youtubeSearchInput = document.getElementById('youtube-search-input');
+      const searchResultsContainer = document.getElementById('search-results-container');
+      const searchToast = document.getElementById('search-toast');
+
+      // === State Variables ===
+      const apiKey = "AIzaSyBdepHrmAMCCUP3flplKccz1Or6n0ilQKE";
+      const artworkCache = {};
+      let playlistData = [];
+      let currentTrackIndex = 0;
+      let lastVolume = 0.5;
+      let shuffleMode = false;
+      let repeatMode = "off"; // off | all | one
+      let playedIndices = [];
+      const controlButtons = [prevBtn, playPauseBtn, stopBtn, nextBtn, progressBar];
+      
+      let visualizerStyle = 'bars';
+      let isLyricsVisible = false;
+      let isAudioContextSetup = false;
+      let audioCtx, analyser, source, bufferLength, dataArray;
+
+      // === Core Functions ===
+      const showMessage = (text, iconName = "alert-circle", spin = false) => {
+        playlistEl.classList.add("hidden");
+        lyricsContainer.classList.add("hidden");
+        messageView.classList.remove("hidden");
+        messageView.innerHTML = `<i data-lucide="${iconName}" class="w-12 h-12 mb-4 ${spin ? 'animate-spin' : ''}" style="color: var(--text-secondary);"></i><p class="mb-4" style="color: var(--text-secondary);">${text}</p>`;
+        lucide.createIcons();
+      };
+
+      const toggleControls = (enabled) => controlButtons.forEach(btn => btn.disabled = !enabled);
+
+      const buildPlaylist = () => {
+        playlistEl.innerHTML = "";
+        if (playlistData.length === 0) {
+            showMessage('Tidak ada lagu. Unggah atau cari musik online.', "folder-x");
+            return;
+        }
+        
+        messageView.classList.add("hidden");
+        playlistEl.classList.remove("hidden");
+
+        playlistData.forEach((song, index) => {
+          const li = document.createElement("li");
+          li.className = "playlist-item p-2 rounded-md cursor-pointer hover:bg-rose-500/50 transition-colors text-sm flex justify-between items-center";
+          li.dataset.index = index;
+          const titleSpan = document.createElement("span");
+          titleSpan.textContent = song.name;
+          titleSpan.className = "title-span truncate";
+          li.appendChild(titleSpan);
+          playlistEl.appendChild(li);
+        });
+        updatePlaylistUI();
+        toggleControls(true);
+      };
+      
+      const fetchArtwork = async (title) => {
+        if (artworkCache[title]) {
+            songArtwork.src = artworkCache[title];
+            return;
+        }
+        songArtwork.src = `https://placehold.co/128x128/374151/9ca3af?text=Loading...`;
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+        const prompt = `Album cover art for a song titled "${title}". Simple, aesthetic, no text.`;
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ instances: [{ prompt: prompt }], parameters: { "sampleCount": 1 } })
+            });
+            if (!response.ok) throw new Error(`API returned status ${response.status}`);
+            const result = await response.json();
+            if (result.predictions && result.predictions[0]?.bytesBase64Encoded) {
+                const imageUrl = `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+                songArtwork.src = imageUrl;
+                artworkCache[title] = imageUrl;
+            } else { throw new Error("No image data in response."); }
+        } catch (error) {
+            console.error("Failed to fetch artwork:", error);
+            songArtwork.src = "https://placehold.co/128x128/374151/9ca3af?text=Music";
+        }
+      };
+
+      const loadTrack = (index, shouldPlay = false) => {
+        if (index < 0 || index >= playlistData.length) return;
+        currentTrackIndex = index;
+        const song = playlistData[index];
+        audio.src = song.path;
+        audio.load();
+        songTitle.textContent = song.name;
+        songFilename.textContent = song.isOnline ? "Dari YouTube (Simulasi)" : "";
+        fetchArtwork(song.name);
+        if (isLyricsVisible) fetchLyrics(song.name);
+        updatePlaylistUI();
+        progressBar.value = 0;
+        currentTimeEl.textContent = "00:00";
+        if(shouldPlay) {
+            audio.play().catch(e => console.error("Gagal memutar audio:", e));
+        }
+      };
+      
+      const updatePlayButtonState = () => {
+        if (audio.paused || audio.ended) {
+          playIcon.classList.remove("hidden");
+          pauseIcon.classList.add("hidden");
+          playPauseBtn.classList.remove("pulse-active");
+        } else {
+          playIcon.classList.add("hidden");
+          pauseIcon.classList.remove("hidden");
+          playPauseBtn.classList.add("pulse-active");
+        }
+      };
+      
+      const stopSong = () => { audio.pause(); audio.currentTime = 0; };
+      
+      const getNextShuffleIndex = () => {
+        if (playedIndices.length >= playlistData.length) playedIndices = [];
+        const remaining = playlistData.map((_, i) => i).filter(i => !playedIndices.includes(i) && i !== currentTrackIndex);
+        if(remaining.length === 0) return (currentTrackIndex + 1) % playlistData.length;
+        const nextIndex = remaining[Math.floor(Math.random() * remaining.length)];
+        playedIndices.push(nextIndex);
+        return nextIndex;
+      };
+
+      const playNext = () => {
+        if (playlistData.length === 0) return;
+        let nextIndex;
+        if (shuffleMode) nextIndex = getNextShuffleIndex();
+        else nextIndex = (currentTrackIndex + 1) % playlistData.length;
+        loadTrack(nextIndex, true);
+      };
+
+      const playPrev = () => {
+        if (playlistData.length === 0) return;
+        const prevIndex = (currentTrackIndex - 1 + playlistData.length) % playlistData.length;
+        loadTrack(prevIndex, true);
+      };
+      
+      const handleVolumeChange = () => {
+        const v = parseFloat(volumeSlider.value);
+        audio.volume = v;
+        volumePercentage.textContent = Math.round(v * 100);
+        volumeIcon.setAttribute("data-lucide", v > 0.5 ? "volume-2" : v > 0 ? "volume-1" : "volume-x");
+        lucide.createIcons();
+      };
+      
+      const toggleMute = () => {
+        if (audio.volume > 0) { lastVolume = audio.volume; volumeSlider.value = 0; }
+        else { volumeSlider.value = lastVolume; }
+        handleVolumeChange();
+      };
+      
+      const updateProgress = () => {
+        if (audio.duration) {
+          progressBar.value = audio.currentTime;
+          currentTimeEl.textContent = formatTime(audio.currentTime);
+        }
+      };
+
+      const setDuration = () => {
+        progressBar.max = audio.duration;
+        durationEl.textContent = formatTime(audio.duration);
+      };
+      
+      const seek = (e) => { audio.currentTime = e.target.value; };
+      
+      const playFromPlaylist = (e) => {
+        const li = e.target.closest("li.playlist-item");
+        if (!li) return;
+        const index = parseInt(li.dataset.index);
+        loadTrack(index, true);
+      };
+      
+      const updatePlaylistUI = () => {
+        playlistEl.querySelectorAll("li").forEach((item, i) => {
+          item.classList.toggle("active", i === currentTrackIndex);
+          if (i === currentTrackIndex)
+            item.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
+      };
+      
+      const formatTime = (s) => isNaN(s) ? "--:--" : `${Math.floor(s / 60).toString().padStart(2, "0")}:${Math.floor(s % 60).toString().padStart(2, "0")}`;
+      
+      const initializeApp = async () => {
+        showMessage("Memindai folder musik...", "loader-2", true);
+        toggleControls(false);
+        try {
+          const res = await fetch(`./scan.php?t=${Date.now()}`);
+          if (!res.ok) throw new Error(res.statusText);
+          const data = await res.json();
+          if (data?.songs?.length > 0) {
+            playlistData = data.songs;
+            buildPlaylist();
+            loadTrack(0);
+          } else {
+             showMessage('Tidak ada lagu ditemukan. Silakan unggah atau cari file musik.', "folder-x");
+          }
+        } catch (e) {
+          console.error("Gagal scan musik:", e);
+          showMessage("Gagal memindai. Coba unggah atau cari musik online.", "wifi-off");
+        }
+      };
+
+      // === FITUR 1: MODE TERANG/GELAP ===
+      themeToggleBtn.addEventListener('click', () => {
+        const isDark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        themeToggleBtn.innerHTML = isDark ? `<i data-lucide="sun" class="w-5 h-5"></i>` : `<i data-lucide="moon" class="w-5 h-5"></i>`;
+        lucide.createIcons();
+      });
+      if (localStorage.getItem('theme') === 'light') {
+        document.documentElement.classList.remove('dark');
+        themeToggleBtn.innerHTML = `<i data-lucide="moon" class="w-5 h-5"></i>`;
+        lucide.createIcons();
+      }
+
+      // === FITUR 2: KUSTOMISASI VISUALIZER ===
+      visualizerStyleSelector.addEventListener('change', (e) => visualizerStyle = e.target.value);
+      
+      const setupAudioContext = () => {
+        if (isAudioContextSetup) return;
+        try {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          analyser = audioCtx.createAnalyser();
+          source = audioCtx.createMediaElementSource(audio);
+          source.connect(analyser);
+          analyser.connect(audioCtx.destination);
+          analyser.fftSize = 256;
+          bufferLength = analyser.frequencyBinCount;
+          dataArray = new Uint8Array(bufferLength);
+          isAudioContextSetup = true;
+        } catch (e) { console.error("Gagal Audio Context:", e); }
+      };
+
+      const drawBars = (ctx, width, height) => {
+        const barCount = bufferLength;
+        const barWidth = (width / barCount) * 1.5;
+        let x = 0;
+        for (let i = 0; i < barCount; i++) {
+          const barHeight = dataArray[i] * (height / 255) * 0.8;
+          const gradient = ctx.createLinearGradient(0, height, 0, height - barHeight);
+          gradient.addColorStop(0, '#f43f5e');
+          gradient.addColorStop(1, '#ec4899');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(x, height - barHeight, barWidth, barHeight);
+          x += barWidth + 1;
+        }
+      };
+      
+      const drawWave = (ctx, width, height) => {
+          ctx.lineWidth = 2;
+          const gradient = ctx.createLinearGradient(0, 0, width, 0);
+          gradient.addColorStop(0, '#f43f5e');
+          gradient.addColorStop(1, '#ec4899');
+          ctx.strokeStyle = gradient;
+          ctx.beginPath();
+          const sliceWidth = width * 1.0 / bufferLength;
+          let x = 0;
+          for (let i = 0; i < bufferLength; i++) {
+              const v = dataArray[i] / 128.0;
+              const y = v * height / 2;
+              if (i === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+              x += sliceWidth;
+          }
+          ctx.lineTo(width, height / 2);
+          ctx.stroke();
+      };
+      
+      const drawCircle = (ctx, width, height) => {
+          const centerX = width / 2;
+          const centerY = height / 2;
+          const radius = Math.min(width, height) / 5;
+          ctx.lineWidth = 2;
+          for (let i = 0; i < bufferLength; i++) {
+              const barHeight = dataArray[i] * 0.4;
+              const angle = (i / bufferLength) * 2 * Math.PI;
+              const x1 = centerX + radius * Math.cos(angle);
+              const y1 = centerY + radius * Math.sin(angle);
+              const x2 = centerX + (radius + barHeight) * Math.cos(angle);
+              const y2 = centerY + (radius + barHeight) * Math.sin(angle);
+              const gradient = ctx.createLinearGradient(x1, y1, x2, y2);
+              gradient.addColorStop(0, '#ec4899');
+              gradient.addColorStop(1, '#f43f5e');
+              ctx.strokeStyle = gradient;
+              ctx.beginPath();
+              ctx.moveTo(x1, y1);
+              ctx.lineTo(x2, y2);
+              ctx.stroke();
+          }
+      };
+
+      const drawVisualizer = () => {
+          requestAnimationFrame(drawVisualizer);
+          if (!isAudioContextSetup) { canvasCtx.clearRect(0, 0, canvas.width, canvas.height); return; }
+          if (!audio.paused) {
+              if (visualizerStyle === 'wave') analyser.getByteTimeDomainData(dataArray);
+              else analyser.getByteFrequencyData(dataArray);
+          } else {
+              let stillAnimating = false;
+              for (let i = 0; i < bufferLength; i++) {
+                  if (visualizerStyle === 'wave') {
+                    if (dataArray[i] > 128) dataArray[i] = Math.max(128, dataArray[i] - 1);
+                    else dataArray[i] = Math.min(128, dataArray[i] + 1);
+                    if (dataArray[i] !== 128) stillAnimating = true;
+                  } else {
+                    dataArray[i] = Math.max(0, dataArray[i] - 2); 
+                    if (dataArray[i] > 0) stillAnimating = true;
+                  }
+              }
+              if (!stillAnimating) { canvasCtx.clearRect(0, 0, canvas.width, canvas.height); return; }
+          }
+          canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+          switch (visualizerStyle) {
+              case 'wave': drawWave(canvasCtx, canvas.width, canvas.height); break;
+              case 'circle': drawCircle(canvasCtx, canvas.width, canvas.height); break;
+              case 'bars': default: drawBars(canvasCtx, canvas.width, canvas.height); break;
+          }
+      };
+      
+      // === FITUR 3: TAMPILAN LIRIK ===
+      const fetchLyrics = async (songName) => {
+          lyricsText.textContent = 'Mencari lirik...';
+          let artist = '', title = songName.replace(/\.[^/.]+$/, "");
+          if (songName.includes(' - ')) [artist, title] = songName.split(' - ').map(s => s.trim());
+          try {
+              const res = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`);
+              if (!res.ok) throw new Error('Lyrics not found');
+              const data = await res.json();
+              lyricsText.textContent = data.lyrics.trim() ? data.lyrics : 'Lirik tidak ditemukan.';
+          } catch (error) {
+              lyricsText.textContent = 'Lirik tidak ditemukan untuk lagu ini.';
+          }
+      };
+      
+      lyricsToggleBtn.addEventListener('click', () => {
+          isLyricsVisible = !isLyricsVisible;
+          lyricsToggleBtn.classList.toggle('shuffle-active', isLyricsVisible);
+          if(isLyricsVisible && playlistData.length > 0) fetchLyrics(playlistData[currentTrackIndex].name);
+          const isPlaylistActive = !isLyricsVisible && playlistData.length > 0;
+          const isMessageActive = !isLyricsVisible && playlistData.length === 0;
+          playlistEl.classList.toggle('hidden', !isPlaylistActive);
+          messageView.classList.toggle('hidden', !isMessageActive);
+          lyricsContainer.classList.toggle('hidden', !isLyricsVisible);
+      });
+      
+      // === FITUR 4: PINTASAN KEYBOARD ===
+      document.addEventListener('keydown', (e) => {
+          if (e.target === searchBar || e.target === youtubeSearchInput) return;
+          let handled = true;
+          switch (e.code) {
+              case 'Space': playPauseBtn.click(); break;
+              case 'ArrowRight': nextBtn.click(); break;
+              case 'ArrowLeft': prevBtn.click(); break;
+              case 'KeyM': volumeBtn.click(); break;
+              case 'KeyL': lyricsToggleBtn.click(); break;
+              case 'KeyR': repeatBtn.click(); break;
+              case 'KeyS': shuffleBtn.click(); break;
+              case 'KeyF': searchMusicBtn.click(); break; // Pintasan baru
+              case 'ArrowUp':
+                  volumeSlider.value = Math.min(1, parseFloat(volumeSlider.value) + 0.05);
+                  volumeSlider.dispatchEvent(new Event('input'));
+                  break;
+              case 'ArrowDown':
+                  volumeSlider.value = Math.max(0, parseFloat(volumeSlider.value) - 0.05);
+                  volumeSlider.dispatchEvent(new Event('input'));
+                  break;
+              default: handled = false;
+          }
+          if (handled) e.preventDefault();
+      });
+      
+      const togglePlayPause = async () => {
+          if (playPauseBtn.disabled) return;
+          if (!isAudioContextSetup) setupAudioContext();
+          try {
+              if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume();
+              if (audio.paused) await audio.play();
+              else audio.pause();
+          } catch (e) { console.error("Gagal play/pause:", e); }
+      };
+
+      // === Upload Logic ===
+      const handleFiles = (files) => {
+        const formData = new FormData();
+        let validFiles = 0;
+        for (const file of files) {
+            if (file.type === "audio/mpeg" || file.type === "audio/wav") {
+                formData.append("musicFiles[]", file);
+                validFiles++;
+            }
+        }
+        if (validFiles > 0) uploadFiles(formData);
+        else {
+            uploadStatus.textContent = "Jenis file tidak valid.";
+            setTimeout(() => uploadStatus.textContent = "", 3000);
+        }
+      };
+
+      const uploadFiles = (formData) => {
+        const xhr = new XMLHttpRequest();
+        const progressWrapper = document.getElementById("progress-wrapper");
+        const progressBarUpload = document.getElementById("progress-bar-upload");
+        xhr.upload.addEventListener("progress", (e) => {
+            if (e.lengthComputable) {
+                const percentComplete = Math.round((e.loaded / e.total) * 100);
+                progressWrapper.classList.remove("hidden");
+                progressBarUpload.style.width = percentComplete + "%";
+                uploadStatus.textContent = `Mengunggah... ${percentComplete}%`;
+            }
+        });
+        xhr.addEventListener("load", () => {
+            progressBarUpload.style.width = "100%";
+            if (xhr.status === 200) {
+                try {
+                    const result = JSON.parse(xhr.responseText);
+                    if (result.status === 'success') {
+                        uploadStatus.textContent = result.message;
+                        setTimeout(() => {
+                            uploadStatus.textContent = "";
+                            progressWrapper.classList.add("hidden");
+                            progressBarUpload.style.width = "0%";
+                            initializeApp();
+                        }, 2000);
+                    } else { throw new Error(result.message); }
+                } catch (error) {
+                     uploadStatus.textContent = `Error: ${error.message}`;
+                     setTimeout(() => {
+                        uploadStatus.textContent = "";
+                        progressWrapper.classList.add("hidden");
+                        progressBarUpload.style.width = "0%";
+                     }, 5000);
+                }
+            } else {
+                 uploadStatus.textContent = `Error: Gagal mengunggah file.`;
+                 setTimeout(() => {
+                    uploadStatus.textContent = "";
+                    progressWrapper.classList.add("hidden");
+                    progressBarUpload.style.width = "0%";
+                 }, 5000);
+            }
+        });
+        xhr.addEventListener("error", () => {
+            uploadStatus.textContent = "Upload gagal.";
+            progressWrapper.classList.add("hidden");
+            progressBarUpload.style.width = "0%";
+            setTimeout(() => uploadStatus.textContent = "", 5000);
+        });
+        xhr.open("POST", "upload.php", true);
+        xhr.send(formData);
+      };
+
+      // === FITUR 5: PENCARIAN MUSIK ONLINE (SIMULASI) ===
+      const openSearchModal = () => searchModal.classList.remove('hidden');
+      const closeSearchModal = () => searchModal.classList.add('hidden');
+      
+      const showSearchToast = () => {
+          searchToast.classList.remove('opacity-0');
+          setTimeout(() => {
+              searchToast.classList.add('opacity-0');
+          }, 2000);
+      };
+
+      const handleSearchSubmit = (e) => {
+        e.preventDefault();
+        const query = youtubeSearchInput.value.trim();
+        if (!query) return;
+
+        searchResultsContainer.innerHTML = `
+            <div class="text-center p-4 text-sm flex items-center justify-center" style="color: var(--text-secondary);">
+                <i data-lucide="loader-2" class="w-5 h-5 mr-2 animate-spin"></i>
+                Mencari "${query}"...
+            </div>`;
+        lucide.createIcons();
+
+        // Simulasi panggilan API dengan setTimeout
+        setTimeout(() => {
+            // Data hasil pencarian palsu (mock data)
+            const mockResults = [
+                { name: `${query} - Official Video`, path: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', isOnline: true },
+                { name: `Best of ${query} Mix`, path: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', isOnline: true },
+                { name: `${query} (Live Performance)`, path: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3', isOnline: true },
+                { name: `Tutorial Gitar ${query}`, path: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3', isOnline: true },
+            ];
+            displaySearchResults(mockResults);
+        }, 1500);
+      };
+
+      const displaySearchResults = (results) => {
+        searchResultsContainer.innerHTML = '';
+        if (results.length === 0) {
+            searchResultsContainer.innerHTML = `<div class="text-center p-4 text-sm" style="color: var(--text-secondary);">Tidak ada hasil ditemukan.</div>`;
+            return;
+        }
+
+        results.forEach(song => {
+            const resultItem = document.createElement('div');
+            resultItem.className = 'p-2 rounded-md hover:bg-rose-500/50 transition-colors text-sm flex justify-between items-center';
+            resultItem.innerHTML = `
+                <span class="truncate pr-2">${song.name}</span>
+                <button class="add-to-playlist-btn flex-shrink-0 p-1.5 bg-rose-600 hover:bg-rose-700 rounded-md text-white transition-colors" title="Tambah ke Daftar Putar">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                </button>`;
+            
+            resultItem.querySelector('.add-to-playlist-btn').addEventListener('click', () => {
+                if (!isAudioContextSetup) setupAudioContext();
+                const isAlreadyInPlaylist = playlistData.some(p => p.path === song.path);
+                if (!isAlreadyInPlaylist) {
+                    playlistData.push(song);
+                    const newIndex = playlistData.length - 1;
+                    buildPlaylist();
+                    loadTrack(newIndex, true);
+                    showSearchToast();
+                    closeSearchModal();
+                } else {
+                    alert("Lagu ini sudah ada di daftar putar Anda.");
+                }
+            });
+
+            searchResultsContainer.appendChild(resultItem);
+        });
+        lucide.createIcons();
+      };
+
+      // Event listeners untuk modal pencarian
+      searchMusicBtn.addEventListener('click', openSearchModal);
+      closeSearchModalBtn.addEventListener('click', closeSearchModal);
+      searchModalOverlay.addEventListener('click', closeSearchModal);
+      searchForm.addEventListener('submit', handleSearchSubmit);
+
+
+      // === Event Listeners Setup ===
+      playPauseBtn.addEventListener("click", togglePlayPause);
+      stopBtn.addEventListener("click", stopSong);
+      nextBtn.addEventListener("click", playNext);
+      prevBtn.addEventListener("click", playPrev);
+      progressBar.addEventListener("input", seek);
+      playlistEl.addEventListener("click", playFromPlaylist);
+      rescanBtn.addEventListener("click", initializeApp);
+      volumeSlider.addEventListener("input", handleVolumeChange);
+      volumeBtn.addEventListener("click", toggleMute);
+      searchBar.addEventListener("input", () => {
+        const keyword = searchBar.value.toLowerCase();
+        playlistEl.querySelectorAll("li").forEach(li => {
+          li.style.display = li.textContent.toLowerCase().includes(keyword) ? "flex" : "none";
+        });
+      });
+      shuffleBtn.addEventListener("click", () => {
+        shuffleMode = !shuffleMode;
+        shuffleBtn.classList.toggle("shuffle-active", shuffleMode);
+        if(shuffleMode) playedIndices = [currentTrackIndex];
+      });
+      repeatBtn.addEventListener("click", () => {
+        const modes = ["off", "all", "one"];
+        const icons = ["repeat", "repeat", "repeat-1"];
+        const currentModeIndex = modes.indexOf(repeatMode);
+        const nextModeIndex = (currentModeIndex + 1) % modes.length;
+        repeatMode = modes[nextModeIndex];
+        repeatBtn.classList.toggle("repeat-active", repeatMode !== "off");
+        repeatBtn.innerHTML = `<i data-lucide="${icons[nextModeIndex]}" class="w-6 h-6"></i>`;
+        lucide.createIcons();
+      });
+      audio.addEventListener("timeupdate", updateProgress);
+      audio.addEventListener("loadedmetadata", setDuration);
+      audio.addEventListener("ended", () => {
+        if (repeatMode === "one") {
+          audio.currentTime = 0;
+          audio.play();
+        } else if (repeatMode === "all" || shuffleMode || currentTrackIndex < playlistData.length - 1) {
+          playNext();
+        } else {
+          stopSong();
+        }
+      });
+      audio.addEventListener("play", updatePlayButtonState);
+      audio.addEventListener("pause", updatePlayButtonState);
+      audio.addEventListener("ended", updatePlayButtonState);
+      
+      fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+          uploadArea.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); });
+      });
+      ['dragenter', 'dragover'].forEach(eventName => {
+          uploadArea.addEventListener(eventName, () => uploadArea.classList.add('dragover'));
+      });
+      ['dragleave', 'drop'].forEach(eventName => {
+          uploadArea.addEventListener(eventName, () => uploadArea.classList.remove('dragover'));
+      });
+      uploadArea.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
+
+      // === App Initialization ===
+      handleVolumeChange();
+      initializeApp();
+      drawVisualizer();
+    });
+  </script>
+</body>
+</html>
+
